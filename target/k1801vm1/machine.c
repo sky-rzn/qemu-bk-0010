@@ -11,11 +11,12 @@
 
 const VMStateDescription vmstate_k1801vm1_cpu = {
     .name = "cpu",
-    .version_id = 1,
+    .version_id = 2,
     .minimum_version_id = 1,
     .fields = (const VMStateField[]) {
         VMSTATE_UINT32_ARRAY(env.regs, K1801VM1CPU, K1801VM1_REG_NUM),
         VMSTATE_UINT32(env.psw, K1801VM1CPU),
+        VMSTATE_UINT64_V(env.cycles, K1801VM1CPU, 2),
         VMSTATE_END_OF_LIST()
     }
 };

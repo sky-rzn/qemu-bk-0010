@@ -31,6 +31,8 @@
 
 #define K1801VM1_RESET_PC       0100000
 
+#define K1801VM1_CLOCK_HZ       3000000
+
 /* Trap and interrupt vectors; the exception index is the vector itself. */
 #define K1801VM1_VEC_BUS_ERROR  0004
 #define K1801VM1_VEC_RESERVED   0010
@@ -42,6 +44,8 @@ typedef struct CPUArchState {
 
     /* Fields after this point are preserved across CPU reset. */
     struct {} end_reset_fields;
+
+    uint64_t cycles;
 } CPUK1801VM1State;
 
 struct ArchCPU {

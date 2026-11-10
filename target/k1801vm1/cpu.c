@@ -53,7 +53,11 @@ static void k1801vm1_restore_state_to_opc(CPUState *cs,
                                           const TranslationBlock *tb,
                                           const uint64_t *data)
 {
-    cpu_env(cs)->regs[K1801VM1_REG_PC] = data[0];
+    CPUK1801VM1State *env = cpu_env(cs);
+
+    env->regs[K1801VM1_REG_PC] = data[0];
+    /* The instruction will run again and charge its cycles again. */
+    env->cycles -= data[1];
 }
 
 static vaddr k1801vm1_pointer_wrap(CPUState *cs, int mmu_idx,

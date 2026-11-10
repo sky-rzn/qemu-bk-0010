@@ -7,3 +7,4 @@
 
 DEF_HELPER_2(raise_exception, noreturn, env, i32)
 DEF_HELPER_1(wait, noreturn, env)
+DEF_HELPER_1(sync_clock, void, env)

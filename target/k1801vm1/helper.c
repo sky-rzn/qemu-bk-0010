@@ -14,6 +14,8 @@
 #include "exec/target_page.h"
 #include "exec/helper-proto.h"
 #include "qemu/plugin.h"
+#include "qemu/host-utils.h"
+#include "qemu/timer.h"
 
 bool k1801vm1_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
                            MMUAccessType access_type, int mmu_idx,
@@ -89,4 +91,23 @@ void HELPER(wait)(CPUK1801VM1State *env)
     cs->halted = 1;
     cs->exception_index = EXCP_HLT;
     cpu_loop_exit(cs);
+}
+
+/* A shorter sleep is not worth a trip through the host scheduler. */
+#define SYNC_SLACK_NS   (1 * SCALE_MS)
+/* Beyond this lag the CPU was halted or the host stalled: skip ahead. */
+#define SYNC_MAX_LAG_NS (100 * SCALE_MS)
+
+void HELPER(sync_clock)(CPUK1801VM1State *env)
+{
+    int64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+    int64_t target = muldiv64(env->cycles, NANOSECONDS_PER_SECOND,
+                              K1801VM1_CLOCK_HZ);
+
+    if (target - now > SYNC_SLACK_NS) {
+        g_usleep(MIN(target - now, SYNC_MAX_LAG_NS) / SCALE_US);
+    } else if (now - target > SYNC_MAX_LAG_NS) {
+        env->cycles += muldiv64(now - target, K1801VM1_CLOCK_HZ,
+                                NANOSECONDS_PER_SECOND);
+    }
 }

@@ -67,6 +67,7 @@ typedef struct DisasContext {
     DisasContextBase base;
     CPUK1801VM1State *env;
     uint16_t opcode;
+    int cycles;
     uint32_t pc;
     OpArgument args[2];
     int byte;
@@ -76,6 +77,7 @@ typedef struct DisasContext {
 
 static TCGv cpu_regs[K1801VM1_REG_NUM];
 static TCGv cpu_reg_psw;
+static TCGv_i64 cpu_cycles;
 
 #define cpu_reg_pc cpu_regs[K1801VM1_REG_PC]
 #define cpu_reg_sp cpu_regs[K1801VM1_REG_SP]
@@ -96,6 +98,9 @@ void k1801vm1_translate_init(void)
     cpu_reg_psw = tcg_global_mem_new_i32(tcg_env,
                                          offsetof(CPUK1801VM1State, psw),
                                          "psw");
+    cpu_cycles = tcg_global_mem_new_i64(tcg_env,
+                                        offsetof(CPUK1801VM1State, cycles),
+                                        "cycles");
 }
 
 static uint16_t code_lduw(DisasContext *ctx, uint32_t addr)
@@ -1061,6 +1066,92 @@ static bool decode_nop(DisasContext *ctx, int op)
     return true;
 }
 
+/*
+ * Instruction times in clock cycles, after Yu. A. Zal'tsman, "Personal'nyj
+ * komp'yuter BK" No. 1, 1995, as refined against real hardware by BKBTL.
+ * They include the wait states the display adds to memory accesses.
+ */
+#define CYCLES_BASE     12
+#define CYCLES_BRANCH   16
+#define CYCLES_SOB      20
+#define CYCLES_RTS      32
+#define CYCLES_RTI      40
+#define CYCLES_TRAP     68
+#define CYCLES_ILLEGAL  144
+#define CYCLES_WAIT     1140
+
+static const uint8_t cycles_src[8]     = { 0, 12, 12, 24, 16, 20, 20, 28 };
+static const uint8_t cycles_dst[8]     = { 0, 20, 20, 32, 24, 36, 32, 40 };
+static const uint8_t cycles_mem_dst[8] = { 4, 16, 20, 24, 16, 24, 24, 36 };
+static const uint8_t cycles_test[8]    = { 0, 20, 20, 32, 20, 28, 32, 36 };
+static const uint8_t cycles_jsr[8]     = { 0, 32, 32, 40, 32, 40, 40, 48 };
+
+static int insn_cycles(uint16_t op)
+{
+    int ms = (op >> 9) & 7;
+    int md = (op >> 3) & 7;
+
+    switch (op >> 12) {
+    case 001: case 004: case 005: case 006:
+    case 011: case 014: case 015: case 016: /* MOV, BIC, BIS, ADD, SUB */
+        return CYCLES_BASE + cycles_src[ms] +
+               (ms ? cycles_mem_dst[md] : cycles_dst[md]);
+    case 002: case 003: case 012: case 013: /* CMP, BIT */
+        return CYCLES_BASE + cycles_src[ms] +
+               (ms ? cycles_src[md] : cycles_test[md]);
+    }
+
+    switch (op & 0177000) {
+    case 0004000: /* JSR */
+        return md ? cycles_jsr[md] : CYCLES_TRAP;
+    case 0074000: /* XOR */
+        return CYCLES_BASE + cycles_test[md];
+    case 0077000:
+        return CYCLES_SOB;
+    case 0104000: /* EMT, TRAP */
+        return CYCLES_TRAP;
+    }
+
+    if ((op & 0074000) == 0 && (op & 0103400) != 0) {
+        return CYCLES_BRANCH;
+    }
+
+    switch (op & 0077700) {
+    case 0005700: /* TST(B) */
+        return CYCLES_BASE + cycles_src[md];
+    case 0006400: /* MTPS */
+        if (!(op & 0100000)) {
+            break;
+        }
+        /* fall through */
+    case 0005000 ... 0005600:
+    case 0006000 ... 0006300:
+    case 0006700:
+        return CYCLES_BASE + cycles_dst[md];
+    }
+
+    switch (op) {
+    case 0000001: /* WAIT */
+    case 0000005: /* RESET */
+        return CYCLES_WAIT;
+    case 0000002: /* RTI */
+    case 0000006: /* RTT */
+        return CYCLES_RTI;
+    case 0000003: /* BPT */
+    case 0000004: /* IOT */
+        return CYCLES_TRAP;
+    case 0000100 ... 0000177: /* JMP */
+        return md ? cycles_test[md] : CYCLES_TRAP;
+    case 0000200 ... 0000207: /* RTS */
+        return CYCLES_RTS;
+    case 0000240 ... 0000277: /* NOP, condition codes */
+        return CYCLES_BASE;
+    case 0000300 ... 0000377: /* SWAB */
+        return CYCLES_BASE + cycles_dst[md];
+    }
+    return CYCLES_ILLEGAL;
+}
+
 static void decode_opc(DisasContext *ctx)
 {
     int op, i;
@@ -1098,20 +1189,23 @@ static void k1801vm1_tr_init_disas_context(DisasContextBase *dcbase,
 
 static void k1801vm1_tr_tb_start(DisasContextBase *dcbase, CPUState *cs)
 {
+    gen_helper_sync_clock(tcg_env);
 }
 
 static void k1801vm1_tr_insn_start(DisasContextBase *dcbase, CPUState *cs)
 {
     DisasContext *ctx = container_of(dcbase, DisasContext, base);
 
-    tcg_gen_insn_start(ctx->pc, 0, 0);
+    ctx->opcode = code_lduw(ctx, ctx->pc);
+    ctx->cycles = insn_cycles(ctx->opcode);
+    tcg_gen_insn_start(ctx->pc, ctx->cycles, 0);
 }
 
 static void k1801vm1_tr_translate_insn(DisasContextBase *dcbase, CPUState *cs)
 {
     DisasContext *ctx = container_of(dcbase, DisasContext, base);
 
-    ctx->opcode = code_lduw(ctx, ctx->pc);
+    tcg_gen_addi_i64(cpu_cycles, cpu_cycles, ctx->cycles);
     decode_opc(ctx);
     ctx->base.pc_next = ctx->pc;
 
