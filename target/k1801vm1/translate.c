@@ -68,6 +68,7 @@ typedef struct DisasContext {
     CPUK1801VM1State *env;
     uint16_t opcode;
     int cycles;
+    int saved;
     uint32_t pc;
     OpArgument args[2];
     int byte;
@@ -1152,6 +1153,63 @@ static int insn_cycles(uint16_t op)
     return CYCLES_ILLEGAL;
 }
 
+static int operand_saved(int operand)
+{
+    int mode = (operand >> 3) & 7;
+    int reg = operand & 7;
+
+    if (mode >= 2 && mode <= 5 && reg != K1801VM1_REG_PC) {
+        return 1 << reg;
+    }
+    return 0;
+}
+
+/*
+ * An I/O access in the middle of a TB rolls the instruction back and runs
+ * it again, so registers it changed before the access must be restored.
+ */
+static int insn_saved(uint16_t op)
+{
+    switch (op >> 12) {
+    case 001: case 002: case 003: case 004: case 005: case 006:
+    case 011: case 012: case 013: case 014: case 015: case 016:
+        return operand_saved(op >> 6) | operand_saved(op);
+    }
+
+    switch (op & 0177000) {
+    case 0004000: /* JSR */
+        return operand_saved(op) | (1 << K1801VM1_REG_SP);
+    case 0074000: /* XOR */
+        return operand_saved(op);
+    }
+
+    if ((op & 0077700) >= 0005000 && (op & 0077700) <= 0006700) {
+        return operand_saved(op);
+    }
+
+    switch (op) {
+    case 0000002: /* RTI */
+    case 0000006: /* RTT */
+        return 1 << K1801VM1_REG_SP;
+    case 0000100 ... 0000177: /* JMP */
+    case 0000300 ... 0000377: /* SWAB */
+        return operand_saved(op);
+    }
+    return 0;
+}
+
+static void gen_save_regs(int saved)
+{
+    int i;
+
+    for (i = 0; i < K1801VM1_REG_NUM; i++) {
+        if (saved & (1 << i)) {
+            tcg_gen_st_i32(cpu_regs[i], tcg_env,
+                           offsetof(CPUK1801VM1State, saved_regs[i]));
+        }
+    }
+}
+
 static void decode_opc(DisasContext *ctx)
 {
     int op, i;
@@ -1198,7 +1256,8 @@ static void k1801vm1_tr_insn_start(DisasContextBase *dcbase, CPUState *cs)
 
     ctx->opcode = code_lduw(ctx, ctx->pc);
     ctx->cycles = insn_cycles(ctx->opcode);
-    tcg_gen_insn_start(ctx->pc, ctx->cycles, 0);
+    ctx->saved = insn_saved(ctx->opcode);
+    tcg_gen_insn_start(ctx->pc, ctx->cycles, ctx->saved);
 }
 
 static void k1801vm1_tr_translate_insn(DisasContextBase *dcbase, CPUState *cs)
@@ -1206,6 +1265,7 @@ static void k1801vm1_tr_translate_insn(DisasContextBase *dcbase, CPUState *cs)
     DisasContext *ctx = container_of(dcbase, DisasContext, base);
 
     tcg_gen_addi_i64(cpu_cycles, cpu_cycles, ctx->cycles);
+    gen_save_regs(ctx->saved);
     decode_opc(ctx);
     ctx->base.pc_next = ctx->pc;
 

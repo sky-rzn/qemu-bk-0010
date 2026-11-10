@@ -42,6 +42,9 @@ typedef struct CPUArchState {
     uint32_t regs[K1801VM1_REG_NUM];
     uint32_t psw;
 
+    /* Registers at the start of the instruction, to restart it after I/O. */
+    uint32_t saved_regs[K1801VM1_REG_NUM];
+
     /* Fields after this point are preserved across CPU reset. */
     struct {} end_reset_fields;
 

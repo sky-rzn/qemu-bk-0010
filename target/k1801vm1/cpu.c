@@ -54,7 +54,13 @@ static void k1801vm1_restore_state_to_opc(CPUState *cs,
                                           const uint64_t *data)
 {
     CPUK1801VM1State *env = cpu_env(cs);
+    int i;
 
+    for (i = 0; i < K1801VM1_REG_NUM; i++) {
+        if (data[2] & (1 << i)) {
+            env->regs[i] = env->saved_regs[i];
+        }
+    }
     env->regs[K1801VM1_REG_PC] = data[0];
     /* The instruction will run again and charge its cycles again. */
     env->cycles -= data[1];
