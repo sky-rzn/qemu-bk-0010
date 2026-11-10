@@ -21,7 +21,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(BkKeyboardState, BK_KEYBOARD)
 #define MOD_SHIFT   0x01
 #define MOD_E0      0x02
 
-/* Indexed by PC scancode set 1, +0x80 when Shift or the E0 prefix is on. */
+/* Indexed by PC scancode set 1, +0x80 when Shift is on. */
 static const uint8_t kbd_table[] = {
 /*        0     1     2     3     4     5     6     7 */
 /*        8     9     a     b     c     d     e     f */
@@ -34,8 +34,8 @@ static const uint8_t kbd_table[] = {
 /*30*/  0142, 0156, 0155, 0054, 0056, 0057, 0000, 0000,
         0017, 0040, 0000, 0000, 0000, 0000, 0000, 0000,
 /*40*/  0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000,
-        0000, 0000, 0000, 0010, 0000, 0031, 0000, 0000,
-/*50*/  0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000,
+        0032, 0000, 0000, 0010, 0000, 0031, 0000, 0000,
+/*50*/  0033, 0000, 0000, 0000, 0000, 0000, 0000, 0000,
         0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000,
 /*60*/  0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000,
         0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000,
@@ -122,9 +122,6 @@ static void bk_keyboard_put_scancode(BkKeyboardState *s, int code)
     case 0xe0:
         s->mod |= MOD_E0;
         return;
-    case 0x1c:
-        s->mod &= ~MOD_E0;
-        break;
     }
 
     if (s->mod & MOD_E0) {
@@ -136,10 +133,7 @@ static void bk_keyboard_put_scancode(BkKeyboardState *s, int code)
         return;
     }
 
-    if (s->mod & MOD_SHIFT) {
-        code += 0x80;
-    }
-    if (mod_e0) {
+    if ((s->mod & MOD_SHIFT) && !mod_e0) {
         code += 0x80;
     }
 
