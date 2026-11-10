@@ -8,6 +8,7 @@
 #include "qemu/osdep.h"
 #include "qapi/error.h"
 #include "qemu/log.h"
+#include "hw/core/irq.h"
 #include "hw/core/qdev-properties.h"
 #include "hw/core/sysbus.h"
 #include "migration/vmstate.h"
@@ -31,6 +32,8 @@ OBJECT_DECLARE_SIMPLE_TYPE(BkSysregsState, BK_SYSREGS)
 #define TIMER_CTRL_EXPIRED  (1 << 7)
 #define TIMER_CTRL_UNUSED   0177400
 
+#define SYSTEM_PORT_SOUND   (1 << 6)
+
 /* The timer counts CPU clock cycles divided by 128. */
 #define TIMER_CLOCK_SHIFT   7
 
@@ -39,6 +42,7 @@ struct BkSysregsState {
 
     MemoryRegion iomem;
     K1801VM1CPU *cpu;
+    qemu_irq sound;
 
     uint16_t timer_load;
     uint16_t timer_count;
@@ -160,8 +164,13 @@ static void bk_sysregs_write(void *opaque, hwaddr addr, uint64_t value,
         s->timer_count = s->timer_load;
         s->timer_div = 0;
         return;
-    case REG_IO_PORT:
     case REG_SYSTEM_PORT:
+        if (size == 1 && (addr & 1)) {
+            return;
+        }
+        qemu_set_irq(s->sound, !!(value & SYSTEM_PORT_SOUND));
+        return;
+    case REG_IO_PORT:
         return;
     }
     qemu_log_mask(LOG_UNIMP, "bk-sysregs: write of %06o to %06o (size %u)\n",
@@ -183,6 +192,7 @@ static void bk_sysregs_init(Object *obj)
     memory_region_init_io(&s->iomem, obj, &bk_sysregs_ops, s,
                           TYPE_BK_SYSREGS, BK_SYSREGS_SIZE);
     sysbus_init_mmio(SYS_BUS_DEVICE(obj), &s->iomem);
+    qdev_init_gpio_out_named(DEVICE(obj), &s->sound, "sound", 1);
 }
 
 static void bk_sysregs_reset_hold(Object *obj, ResetType type)

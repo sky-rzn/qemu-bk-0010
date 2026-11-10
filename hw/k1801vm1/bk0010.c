@@ -12,6 +12,7 @@
 #include "qemu/cutils.h"
 #include "hw/core/boards.h"
 #include "hw/core/loader.h"
+#include "hw/core/qdev-properties.h"
 #include "hw/core/sysbus.h"
 #include "system/address-spaces.h"
 #include "target/k1801vm1/cpu.h"
@@ -41,7 +42,7 @@ static void bk0010_init(MachineState *machine)
     MemoryRegion *monitor_rom = g_new(MemoryRegion, 1);
     MemoryRegion *basic_rom = g_new(MemoryRegion, 1);
     K1801VM1CPU *cpu;
-    DeviceState *dev;
+    DeviceState *dev, *speaker;
 
     if (machine->ram_size != mc->default_ram_size) {
         g_autofree char *sz = size_to_str(mc->default_ram_size);
@@ -62,10 +63,20 @@ static void bk0010_init(MachineState *machine)
                            BK_BASIC_ROM_SIZE, &error_fatal);
     memory_region_add_subregion(sysmem, BK_BASIC_ROM_BASE, basic_rom);
 
+    speaker = qdev_new(TYPE_BK_SPEAKER);
+    object_property_set_link(OBJECT(speaker), "cpu", OBJECT(cpu),
+                             &error_abort);
+    if (machine->audiodev) {
+        qdev_prop_set_string(speaker, "audiodev", machine->audiodev);
+    }
+    sysbus_realize_and_unref(SYS_BUS_DEVICE(speaker), &error_fatal);
+
     dev = qdev_new(TYPE_BK_SYSREGS);
     object_property_set_link(OBJECT(dev), "cpu", OBJECT(cpu), &error_abort);
     sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
     sysbus_mmio_map_overlap(SYS_BUS_DEVICE(dev), 0, BK_SYSREGS_BASE, 1);
+    qdev_connect_gpio_out_named(dev, "sound", 0,
+                                qdev_get_gpio_in(speaker, 0));
 
     dev = qdev_new(TYPE_BK_DISPLAY);
     sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
@@ -91,6 +102,7 @@ static void bk0010_machine_init(MachineClass *mc)
     mc->default_cpu_type = TYPE_K1801VM1_CPU;
     mc->default_ram_size = BK_RAM_SIZE;
     mc->default_ram_id = "bk0010.ram";
+    machine_add_audiodev_property(mc);
 }
 
 DEFINE_MACHINE("bk0010", bk0010_machine_init)

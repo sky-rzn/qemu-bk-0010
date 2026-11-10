@@ -10,6 +10,7 @@
 
 #define TYPE_BK_DISPLAY         "bk-display"
 #define TYPE_BK_KEYBOARD        "bk-keyboard"
+#define TYPE_BK_SPEAKER         "bk-speaker"
 #define TYPE_BK_SYSREGS         "bk-sysregs"
 
 #define BK_RAM_BASE             0000000

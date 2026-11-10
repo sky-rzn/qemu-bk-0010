@@ -3,6 +3,7 @@ k1801vm1_ss.add(when: 'CONFIG_BK0010', if_true: files(
   'bk0010.c',
   'display.c',
   'keyboard.c',
+  'speaker.c',
   'sysregs.c',
 ))
 
