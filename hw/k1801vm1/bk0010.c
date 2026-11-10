@@ -63,6 +63,7 @@ static void bk0010_init(MachineState *machine)
     memory_region_add_subregion(sysmem, BK_BASIC_ROM_BASE, basic_rom);
 
     dev = qdev_new(TYPE_BK_SYSREGS);
+    object_property_set_link(OBJECT(dev), "cpu", OBJECT(cpu), &error_abort);
     sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
     sysbus_mmio_map_overlap(SYS_BUS_DEVICE(dev), 0, BK_SYSREGS_BASE, 1);
 
