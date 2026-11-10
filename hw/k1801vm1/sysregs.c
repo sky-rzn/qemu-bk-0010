@@ -33,6 +33,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(BkSysregsState, BK_SYSREGS)
 #define TIMER_CTRL_UNUSED   0177400
 
 #define SYSTEM_PORT_SOUND   (1 << 6)
+#define SYSTEM_PORT_NOKEY   (1 << 6)
 
 /* The timer counts CPU clock cycles divided by 128. */
 #define TIMER_CLOCK_SHIFT   7
@@ -43,6 +44,7 @@ struct BkSysregsState {
     MemoryRegion iomem;
     K1801VM1CPU *cpu;
     qemu_irq sound;
+    bool key_down;
 
     uint16_t timer_load;
     uint16_t timer_count;
@@ -136,7 +138,8 @@ static uint64_t bk_sysregs_read(void *opaque, hwaddr addr, unsigned size)
     case REG_IO_PORT:
         return 0;
     case REG_SYSTEM_PORT:
-        return size == 1 ? 0x80 : 0x8080;
+        val = 0100200 | (s->key_down ? 0 : SYSTEM_PORT_NOKEY);
+        break;
     default:
         qemu_log_mask(LOG_UNIMP, "bk-sysregs: read of %06o (size %u)\n",
                       (unsigned)(BK_SYSREGS_BASE + addr), size);
@@ -185,6 +188,13 @@ static const MemoryRegionOps bk_sysregs_ops = {
     .valid.max_access_size = 2,
 };
 
+static void bk_sysregs_key_down(void *opaque, int n, int level)
+{
+    BkSysregsState *s = opaque;
+
+    s->key_down = level;
+}
+
 static void bk_sysregs_init(Object *obj)
 {
     BkSysregsState *s = BK_SYSREGS(obj);
@@ -193,6 +203,7 @@ static void bk_sysregs_init(Object *obj)
                           TYPE_BK_SYSREGS, BK_SYSREGS_SIZE);
     sysbus_init_mmio(SYS_BUS_DEVICE(obj), &s->iomem);
     qdev_init_gpio_out_named(DEVICE(obj), &s->sound, "sound", 1);
+    qdev_init_gpio_in_named(DEVICE(obj), bk_sysregs_key_down, "key-down", 1);
 }
 
 static void bk_sysregs_reset_hold(Object *obj, ResetType type)
@@ -208,9 +219,10 @@ static void bk_sysregs_reset_hold(Object *obj, ResetType type)
 
 static const VMStateDescription vmstate_bk_sysregs = {
     .name = TYPE_BK_SYSREGS,
-    .version_id = 1,
-    .minimum_version_id = 1,
+    .version_id = 2,
+    .minimum_version_id = 2,
     .fields = (const VMStateField[]) {
+        VMSTATE_BOOL(key_down, BkSysregsState),
         VMSTATE_UINT16(timer_load, BkSysregsState),
         VMSTATE_UINT16(timer_count, BkSysregsState),
         VMSTATE_UINT16(timer_ctrl, BkSysregsState),

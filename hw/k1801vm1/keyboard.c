@@ -6,6 +6,7 @@
  */
 
 #include "qemu/osdep.h"
+#include "qemu/bitmap.h"
 #include "qemu/log.h"
 #include "hw/core/irq.h"
 #include "hw/core/sysbus.h"
@@ -57,7 +58,9 @@ struct BkKeyboardState {
     MemoryRegion iomem;
     QemuInputHandlerState *hs;
     qemu_irq irq;
+    qemu_irq key_down;
 
+    DECLARE_BITMAP(pressed, Q_KEY_CODE__MAX);
     uint16_t state_reg;
     uint16_t data_reg;
     uint16_t mod;
@@ -152,8 +155,27 @@ static void bk_keyboard_event(DeviceState *dev, QemuConsole *src,
                               QemuInputEvent *evt)
 {
     BkKeyboardState *s = BK_KEYBOARD(dev);
+    int qcode = qemu_input_linux_to_qcode(evt->key.key);
     int codes[16];
     int i, n;
+
+    switch (qcode) {
+    case Q_KEY_CODE_SHIFT:
+    case Q_KEY_CODE_SHIFT_R:
+    case Q_KEY_CODE_CTRL:
+    case Q_KEY_CODE_CTRL_R:
+    case Q_KEY_CODE_ALT:
+    case Q_KEY_CODE_ALT_R:
+        break;
+    default:
+        if (evt->key.down) {
+            set_bit(qcode, s->pressed);
+        } else {
+            clear_bit(qcode, s->pressed);
+        }
+        qemu_set_irq(s->key_down,
+                     !bitmap_empty(s->pressed, Q_KEY_CODE__MAX));
+    }
 
     n = qemu_input_linux_to_scancode(evt->key.key, evt->key.down, codes);
     for (i = 0; i < n; i++) {
@@ -174,6 +196,8 @@ static void bk_keyboard_reset_hold(Object *obj, ResetType type)
     s->state_reg = 0;
     s->data_reg = 0;
     s->mod = 0;
+    bitmap_zero(s->pressed, Q_KEY_CODE__MAX);
+    qemu_set_irq(s->key_down, 0);
 }
 
 static void bk_keyboard_realize(DeviceState *dev, Error **errp)
@@ -191,6 +215,7 @@ static void bk_keyboard_init(Object *obj)
                           TYPE_BK_KEYBOARD, BK_KEYBOARD_SIZE);
     sysbus_init_mmio(SYS_BUS_DEVICE(obj), &s->iomem);
     sysbus_init_irq(SYS_BUS_DEVICE(obj), &s->irq);
+    qdev_init_gpio_out_named(DEVICE(obj), &s->key_down, "key-down", 1);
 }
 
 static const VMStateDescription bk_keyboard_vmstate = {

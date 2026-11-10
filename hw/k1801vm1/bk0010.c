@@ -42,7 +42,7 @@ static void bk0010_init(MachineState *machine)
     MemoryRegion *monitor_rom = g_new(MemoryRegion, 1);
     MemoryRegion *basic_rom = g_new(MemoryRegion, 1);
     K1801VM1CPU *cpu;
-    DeviceState *dev, *speaker;
+    DeviceState *dev, *speaker, *sysregs;
 
     if (machine->ram_size != mc->default_ram_size) {
         g_autofree char *sz = size_to_str(mc->default_ram_size);
@@ -71,11 +71,12 @@ static void bk0010_init(MachineState *machine)
     }
     sysbus_realize_and_unref(SYS_BUS_DEVICE(speaker), &error_fatal);
 
-    dev = qdev_new(TYPE_BK_SYSREGS);
-    object_property_set_link(OBJECT(dev), "cpu", OBJECT(cpu), &error_abort);
-    sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
-    sysbus_mmio_map_overlap(SYS_BUS_DEVICE(dev), 0, BK_SYSREGS_BASE, 1);
-    qdev_connect_gpio_out_named(dev, "sound", 0,
+    sysregs = qdev_new(TYPE_BK_SYSREGS);
+    object_property_set_link(OBJECT(sysregs), "cpu", OBJECT(cpu),
+                             &error_abort);
+    sysbus_realize_and_unref(SYS_BUS_DEVICE(sysregs), &error_fatal);
+    sysbus_mmio_map_overlap(SYS_BUS_DEVICE(sysregs), 0, BK_SYSREGS_BASE, 1);
+    qdev_connect_gpio_out_named(sysregs, "sound", 0,
                                 qdev_get_gpio_in(speaker, 0));
 
     dev = qdev_new(TYPE_BK_DISPLAY);
@@ -88,6 +89,8 @@ static void bk0010_init(MachineState *machine)
     sysbus_mmio_map_overlap(SYS_BUS_DEVICE(dev), 0, BK_KEYBOARD_BASE, 2);
     sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0,
                        qdev_get_gpio_in(DEVICE(cpu), 0));
+    qdev_connect_gpio_out_named(dev, "key-down", 0,
+                                qdev_get_gpio_in_named(sysregs, "key-down", 0));
 
     bk0010_load_rom(machine->firmware ?: MONITOR_ROM_FILENAME,
                     BK_MONITOR_ROM_BASE, BK_MONITOR_ROM_SIZE);
