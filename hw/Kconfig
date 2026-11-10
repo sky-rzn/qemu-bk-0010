@@ -56,6 +56,7 @@ source avr/Kconfig
 source hexagon/Kconfig
 source hppa/Kconfig
 source i386/Kconfig
+source k1801vm1/Kconfig
 source loongarch/Kconfig
 source m68k/Kconfig
 source microblaze/Kconfig

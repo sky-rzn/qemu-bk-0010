@@ -6,6 +6,7 @@ subdir('hppa')
 subdir('hexagon')
 subdir('xenpv') # i386 uses it
 subdir('i386')
+subdir('k1801vm1')
 subdir('loongarch')
 subdir('m68k')
 subdir('microblaze')

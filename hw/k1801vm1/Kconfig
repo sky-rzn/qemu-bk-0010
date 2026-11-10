@@ -1,0 +1,4 @@
+config BK0010
+    bool
+    default y
+    depends on K1801VM1
