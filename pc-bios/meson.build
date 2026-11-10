@@ -28,6 +28,8 @@ blobs = [
   'bios.bin',
   'bios-256k.bin',
   'bios-microvm.bin',
+  'bk0010-basic10.rom',
+  'bk0010-monit10.rom',
   'qboot.rom',
   'vgabios.bin',
   'vgabios-cirrus.bin',
