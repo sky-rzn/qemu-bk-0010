@@ -169,7 +169,9 @@ static void bk_keyboard_event(DeviceState *dev, QemuConsole *src,
         break;
     default:
         if (evt->key.down) {
-            set_bit(qcode, s->pressed);
+            if (test_and_set_bit(qcode, s->pressed)) {
+                return;
+            }
         } else {
             clear_bit(qcode, s->pressed);
         }
