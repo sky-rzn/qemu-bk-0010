@@ -19,6 +19,9 @@ const char *audio_prio_list[] = {
     "dbus",
 #endif
     "spice",
+#ifdef CONFIG_EMSCRIPTEN
+    "wasm",
+#endif
     CONFIG_AUDIO_DRIVERS
     "none",
     NULL
@@ -318,6 +321,10 @@ static AudiodevPerDirectionOptions *audio_get_pdo_out(Audiodev *dev)
 #endif
     case AUDIODEV_DRIVER_WAV:
         return dev->u.wav.out;
+#ifdef CONFIG_EMSCRIPTEN
+    case AUDIODEV_DRIVER_WASM:
+        return dev->u.wasm.out;
+#endif
 
     case AUDIODEV_DRIVER__MAX:
         break;
@@ -377,6 +384,10 @@ static AudiodevPerDirectionOptions *audio_get_pdo_in(Audiodev *dev)
 #endif
     case AUDIODEV_DRIVER_WAV:
         return dev->u.wav.in;
+#ifdef CONFIG_EMSCRIPTEN
+    case AUDIODEV_DRIVER_WASM:
+        return dev->u.wasm.in;
+#endif
 
     case AUDIODEV_DRIVER__MAX:
         break;

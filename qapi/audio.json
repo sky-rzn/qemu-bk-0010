@@ -447,6 +447,8 @@
 #
 # @jack: JACK audio backend (since 5.1)
 #
+# @wasm: Web page audio from the Emscripten build (since 11.2)
+#
 # Since: 4.0
 ##
 { 'enum': 'AudiodevDriver',
@@ -462,7 +464,8 @@
             { 'name': 'sdl', 'if': 'CONFIG_AUDIO_SDL' },
             { 'name': 'sndio', 'if': 'CONFIG_AUDIO_SNDIO' },
             { 'name': 'spice', 'if': 'CONFIG_SPICE' },
-            'wav' ] }
+            'wav',
+            { 'name': 'wasm', 'if': 'CONFIG_EMSCRIPTEN' } ] }
 
 ##
 # @Audiodev:
@@ -507,7 +510,9 @@
                    'if': 'CONFIG_AUDIO_SNDIO' },
     'spice':     { 'type': 'AudiodevGenericOptions',
                    'if': 'CONFIG_SPICE' },
-    'wav':       'AudiodevWavOptions' } }
+    'wav':       'AudiodevWavOptions',
+    'wasm':      { 'type': 'AudiodevGenericOptions',
+                   'if': 'CONFIG_EMSCRIPTEN' } } }
 
 ##
 # @query-audiodevs:

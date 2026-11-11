@@ -388,6 +388,10 @@ AudiodevPerDirectionOptions *glue(audio_get_pdo_, TYPE)(Audiodev *dev)
 #endif
     case AUDIODEV_DRIVER_WAV:
         return dev->u.wav.TYPE;
+#ifdef CONFIG_EMSCRIPTEN
+    case AUDIODEV_DRIVER_WASM:
+        return dev->u.wasm.TYPE;
+#endif
 
     case AUDIODEV_DRIVER__MAX:
         break;
